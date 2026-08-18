@@ -1,0 +1,24 @@
+# 依赖与构建产物（体积大，不入仓库）
+node_modules/
+out/
+dist/
+
+# 日志与临时
+build.log
+*.log
+*.nsis.7z
+*.appx
+*.snap
+
+# electron 缓存
+.electron-cache/
+
+# 系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp

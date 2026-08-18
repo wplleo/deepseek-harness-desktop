@@ -1,0 +1,15 @@
+appId: com.deepseekai.dsh.desktop
+productName: DeepSeek Harness Desktop
+directories:
+  output: out
+files: []
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: DeepSeek Harness Desktop

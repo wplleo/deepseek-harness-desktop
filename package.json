@@ -1,0 +1,13 @@
+{
+  "name": "dsh-desktop",
+  "version": "1.0.0",
+  "productName": "DeepSeek Harness Desktop",
+  "description": "DeepSeek Harness Desktop — 桌面版 DeepSeek Harness Web GUI",
+  "main": "src/main.js",
+  "author": "dsh-desktop",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^37.10.3",
+    "electron-builder": "^24.13.3"
+  }
+}
