@@ -2,7 +2,15 @@ appId: com.deepseekai.dsh.desktop
 productName: DeepSeek Harness Desktop
 directories:
   output: out
-files: []
+electronDist: node_modules/electron/dist
+asar: false
+files:
+  - "src/**"
+  - "build/**"
+  - "package.json"
+extraResources:
+  - from: vendor/node_modules
+    to: app/node_modules
 win:
   icon: build/icon.ico
   target:

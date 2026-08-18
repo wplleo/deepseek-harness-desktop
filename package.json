@@ -6,6 +6,9 @@
   "main": "src/main.js",
   "author": "dsh-desktop",
   "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh": "*"
+  },
   "devDependencies": {
     "electron": "^37.10.3",
     "electron-builder": "^24.13.3"
