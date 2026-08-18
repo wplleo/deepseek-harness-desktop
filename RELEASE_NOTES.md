@@ -15,6 +15,7 @@ Windows 用户直接下载下方的 DeepSeek Harness Desktop Setup 1.0.0.exe（�
 - 关闭 asar 打包，改用 asar:false + extraResources 把 dsh 全家桶（@deepseek-ai/dsh 等 195 个包，约 206MB）原样打进 resources/app/node_modules，resolveDshEntry 可正确定位 dsh/lib/bin.js。
 - 首版因 dsh 被打入 asar 导致启动即崩溃（找不到 bin.js），本版已修复。
 - 已本地验证：dsh 服务可在 127.0.0.1 随机端口正常提供 HTTP 服务（HTTP 200）。
+- 更新应用图标：去掉鲸鱼上下两条黑色横线，四角改为圆角。
 - 注意：首次启动 dsh 加载插件约需 30 秒，请耐心等待窗口出现。
 
 构建说明
@@ -26,5 +27,5 @@ Windows 用户直接下载下方的 DeepSeek Harness Desktop Setup 1.0.0.exe（�
 
 - 文件：DeepSeek Harness Desktop Setup 1.0.0.exe
 - 大小：约 129 MB
-- sha256：ccdb4a95604fb0df014b8dee1e40d1391ddb8b97d273ea529036cb394e24ad8f
+- sha256：77523df1f4547d1e816b8d66611748c8471a5d55b4cc7993214cb4f8c61111de
 - 生成时间：2026-08-18
