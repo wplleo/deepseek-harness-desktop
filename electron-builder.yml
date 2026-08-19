@@ -11,6 +11,8 @@ files:
 extraResources:
   - from: vendor/node_modules
     to: app/node_modules
+  - from: build/icon.ico
+    to: appicon.ico
 win:
   icon: build/icon.ico
   target:
@@ -21,3 +23,4 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   shortcutName: DeepSeek Harness Desktop
+  include: build/installer.nsh
