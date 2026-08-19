@@ -1,139 +1,54 @@
-from PIL import Image
-import os
+from PIL import Image, ImageDraw
+import struct, io
 
-SRC = r"E:\DeepSeek\rebuild\build\icon.png"
-BACKUP = r"E:\DeepSeek\rebuild\build\icon.src.png"
-OUT_PNG = r"E:\DeepSeek\rebuild\build\icon.png"
-OUT_ICO = r"E:\DeepSeek\rebuild\build\icon.ico"
+SRC = r'E:/DeepSeek/rebuild/build/whale_only.png'   # 透明鲸鱼素材
+OUT_PNG = r'E:/DeepSeek/rebuild/build/icon.png'
+OUT_ICO = r'E:/DeepSeek/rebuild/build/icon.ico'
 
-WHITE_TH = 245      # 背景白阈值
-ALPHA_TH = 10       # 已透明像素忽略
-FILL_RATIO = 0.78   # 鲸鱼占画布比例（去背后放大）
+whale = Image.open(SRC).convert('RGBA')
+print('whale素材', whale.size)
 
+def make(size, radius_ratio=0.20, whale_ratio=0.72, bg=(255, 255, 255, 255)):
+    canvas = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(canvas)
+    r = max(1, int(size * radius_ratio))
+    # 白色圆角矩形背景（四个角圆弧，角外透明）
+    d.rounded_rectangle([0, 0, size - 1, size - 1], radius=r, fill=bg)
+    # 放大黑鲸鱼居中
+    th = int(size * whale_ratio)
+    tw = int(whale.width * th / whale.height)
+    scaled = whale.resize((tw, th), Image.LANCZOS)
+    ox = (size - tw) // 2
+    oy = (size - th) // 2
+    canvas.alpha_composite(scaled, (ox, oy))
+    return canvas
 
-def is_background_white(r, g, b, a):
-    return a > ALPHA_TH and r > WHITE_TH and g > WHITE_TH and b > WHITE_TH
+sizes = [16, 24, 32, 48, 64, 128, 256]
+frames = {s: make(s) for s in sizes}
 
+# 保存透明背景 PNG（256）
+frames[256].save(OUT_PNG)
+print('saved', OUT_PNG)
 
-def remove_background_white(im: Image.Image):
-    """把最大的连续白色区域当成背景去掉，保留鲸鱼内部的白色块。"""
-    w, h = im.size
-    px = list(im.get_flattened_data())
-    visited = [False] * (w * h)
+# 手写多帧 ICO（PNG 帧，Windows 全认）
+bufs = []
+for s in sizes:
+    b = io.BytesIO()
+    frames[s].save(b, format='PNG')
+    bufs.append(b.getvalue())
 
-    def neighbors(idx):
-        x = idx % w
-        y = idx // w
-        if x > 0:
-            yield idx - 1
-        if x < w - 1:
-            yield idx + 1
-        if y > 0:
-            yield idx - w
-        if y < h - 1:
-            yield idx + w
+offset = 6 + 16 * len(sizes)
+header = struct.pack('<HHH', 0, 1, len(sizes))
+entries = b''
+data_blob = b''
+for s, raw in zip(sizes, bufs):
+    wb = 0 if s == 256 else s
+    entries += struct.pack('<BBBBHHII', wb, wb, 0, 0, 1, 32, len(raw), offset + len(data_blob))
+    data_blob += raw
+with open(OUT_ICO, 'wb') as f:
+    f.write(header + entries + data_blob)
 
-    components = []
-    for start in range(w * h):
-        if visited[start]:
-            continue
-        r, g, b, a = px[start]
-        if not is_background_white(r, g, b, a):
-            visited[start] = True
-            continue
-        # BFS 这个白色连通块
-        comp = []
-        stack = [start]
-        visited[start] = True
-        while stack:
-            idx = stack.pop()
-            comp.append(idx)
-            for nb in neighbors(idx):
-                if not visited[nb]:
-                    nr, ng, nb_, na = px[nb]
-                    if is_background_white(nr, ng, nb_, na):
-                        visited[nb] = True
-                        stack.append(nb)
-                    else:
-                        visited[nb] = True
-        components.append(comp)
-
-    if not components:
-        return im
-
-    # 最大的白色块是背景
-    bg = max(components, key=len)
-    for idx in bg:
-        px[idx] = (255, 255, 255, 0)
-
-    im.putdata(px)
-    return im
-
-
-def main():
-    if not os.path.exists(BACKUP):
-        Image.open(SRC).save(BACKUP)
-
-    im = Image.open(SRC).convert("RGBA")
-    im = remove_background_white(im)
-
-    # 裁切到鲸鱼内容
-    bbox = im.getbbox()
-    if bbox:
-        whale = im.crop(bbox)
-    else:
-        whale = im
-
-    # 生成 256x256 主图：透明底，鲸鱼放大居中
-    canvas_size = 256
-    whale_w, whale_h = whale.size
-    target = int(canvas_size * FILL_RATIO)
-    scale = min(target / whale_w, target / whale_h)
-    new_w, new_h = int(whale_w * scale), int(whale_h * scale)
-    scaled = whale.resize((new_w, new_h), Image.LANCZOS)
-
-    canvas = Image.new("RGBA", (canvas_size, canvas_size), (255, 255, 255, 0))
-    canvas.paste(scaled, ((canvas_size - new_w) // 2, (canvas_size - new_h) // 2), scaled)
-
-    # 覆盖 icon.png
-    canvas.save(OUT_PNG)
-
-    # 生成 ICO（多尺寸 PNG 帧，透明底）
-    sizes = [16, 24, 32, 48, 64, 128, 256]
-    frames = []
-    for s in sizes:
-        frame = canvas.resize((s, s), Image.LANCZOS)
-        frames.append(frame)
-
-    # Pillow 对 ICO 的 sizes 参数支持有限，手动拼 PNG-in-ICO
-    import struct
-    frame_data = []
-    for frame in frames:
-        from io import BytesIO
-        buf = BytesIO()
-        frame.save(buf, format="PNG")
-        data = buf.getvalue()
-        frame_data.append(data)
-
-    num = len(sizes)
-    header = struct.pack("<HHH", 0, 1, num)
-    entries = b""
-    offset = 6 + 16 * num
-    for i, s in enumerate(sizes):
-        data = frame_data[i]
-        # ICO 目录里宽高是字节，0 表示 256
-        wb = s if s < 256 else 0
-        entries += struct.pack("<BBBBHHII", wb, wb, 0, 0, 1, 32, len(data), offset)
-        offset += len(data)
-
-    with open(OUT_ICO, "wb") as f:
-        f.write(header)
-        f.write(entries)
-        for data in frame_data:
-            f.write(data)
-
-    print(f"Saved {OUT_PNG} ({canvas_size}x{canvas_size}), {OUT_ICO} ({num} frames)")
-
-
-if __name__ == "__main__":
-    main()
+with open(OUT_ICO, 'rb') as f:
+    raw = f.read()
+count = struct.unpack('<HHH', raw[:6])[2]
+print('saved', OUT_ICO, '目录项(帧)数=', count)
