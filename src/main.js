@@ -7,8 +7,10 @@
  *  - 自动拉起 dsh web 服务（优先内置 node_modules 中的 dsh，回退系统 PATH）
  *  - 轮询端口就绪后创建原生窗口加载界面
  *  - 托盘常驻：关闭窗口最小化到托盘，退出时优雅停止 dsh 服务
+ *  - 自动更新：打包版启动后检测 GitHub Release，下载后弹窗询问重启安装
  */
 const { app, BrowserWindow, Tray, Menu, Notification, dialog, shell, nativeImage } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const net = require('node:net');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -322,6 +324,58 @@ function createTray() {
   log('托盘已创建');
 }
 
+/* ---------------------------------------------------------------- 自动更新 */
+function initAutoUpdater() {
+  if (!app.isPackaged) {
+    log('开发模式：跳过自动更新检测');
+    return;
+  }
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnQuit = true;
+  autoUpdater.logger = {
+    info: (m) => log('[updater]', m),
+    warn: (m) => log('[updater:warn]', m),
+    error: (m) => log('[updater:error]', m),
+  };
+  try { autoUpdater.logger.level = 'info'; } catch { /* 部分版本无 level */ }
+
+  autoUpdater.on('update-available', (info) => log('发现新版本', (info && info.version) || ''));
+  autoUpdater.on('update-not-available', (info) =>
+    log('已是最新', (info && info.version) || app.getVersion())
+  );
+  autoUpdater.on('download-progress', (p) =>
+    log('更新下载进度', Math.round((p && p.percent) || 0) + '%')
+  );
+  autoUpdater.on('update-downloaded', (info) => {
+    log('更新已下载', (info && info.version) || '');
+    dialog
+      .showMessageBox({
+        type: 'info',
+        title: APP_NAME,
+        message: `发现新版本 v${(info && info.version) || ''}`,
+        detail: '更新已下载完成，重启应用即可安装。是否现在重启？',
+        buttons: ['现在重启', '稍后'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) {
+          isQuitting = true;
+          autoUpdater.quitAndInstall();
+        }
+      });
+  });
+  autoUpdater.on('error', (e) => log('自动更新出错', (e && e.message) || String(e)));
+
+  log('开始检测更新…');
+  autoUpdater.checkForUpdates().catch((e) => log('checkForUpdates 失败', (e && e.message) || String(e)));
+  // 之后每小时再查一次，覆盖用户长时间挂机的情况
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 60 * 60 * 1000);
+}
+
 /* ---------------------------------------------------------------- 启动 */
 async function main() {
   app.setAppUserModelId(APP_ID);
@@ -357,6 +411,7 @@ async function main() {
   log('服务就绪，创建窗口');
   createWindow();
   createTray();
+  initAutoUpdater();
 }
 
 /* 兜底托盘图标（16x16 PNG，深蓝圆点，由 scripts/make-icon.js 生成的正式版会覆盖） */

@@ -24,3 +24,7 @@ nsis:
   createDesktopShortcut: true
   shortcutName: DeepSeek Harness Desktop
   include: build/installer.nsh
+publish:
+  - provider: github
+    owner: wplleo
+    repo: deepseek-harness-desktop
