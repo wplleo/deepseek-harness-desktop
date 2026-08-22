@@ -2,6 +2,8 @@
 node_modules/
 out/
 dist/
+dsh-out/
+out_old_20260822/
 
 # 日志与临时
 build.log

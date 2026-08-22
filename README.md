@@ -12,6 +12,8 @@
 - 原生窗口加载本地 dsh 服务（随机端口，绑定 127.0.0.1）
 - 托盘常驻，关闭窗口不会退出后台服务
 - 自带深蓝圆角方块 + 白鲸鱼图标
+- **外壳自动更新**（electron-updater）：新版安装包发布后自动下载提示安装
+- **dsh 引擎独立自动更新**（v1.2.0+）：内置 dsh 引擎可独立于安装包升级，后台自动下载替换，无需重装
 
 ## 下载
 
@@ -26,8 +28,24 @@
 ## 目录结构
 
 - `src/main.js`：Electron 主进程，拉起 dsh 服务并加载原生窗口
+- `src/dsh-update.js`：dsh 引擎独立自更新模块（manifest 比对 / 下载 / 校验 / 备份回滚）
+- `scripts/pack-dsh.js`：dsh 构建产物打包脚本（产出 tar.gz + manifest，用于发布 dsh 更新）
 - `electron-builder.yml`：打包配置（含 NSIS 自定义安装宏）
 - `build/`：图标与构建脚本
+
+## 发布 dsh 引擎更新
+
+dsh 引擎更新走独立的 Release 频道（tag: `dsh-updates`），与外壳版本互不干扰：
+
+```bash
+# 1. 打包新 dsh（源目录指向含 @deepseek-ai 的 node_modules）
+node scripts/pack-dsh.js <含 @deepseek-ai 的目录> ./dsh-out <版本号>
+
+# 2. 上传到 dsh-updates Release
+gh release upload dsh-updates dsh-out/dsh-build-*.tar.gz dsh-out/dsh-manifest.json --clobber
+```
+
+上传后，所有运行 v1.2.0+ 的桌面端会在下次检查时自动下载并替换 dsh 引擎（默认每 6 小时检查一次）。
 
 ## 说明
 

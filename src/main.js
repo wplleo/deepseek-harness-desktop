@@ -8,6 +8,7 @@
  *  - 轮询端口就绪后创建原生窗口加载界面
  *  - 托盘常驻：关闭窗口最小化到托盘，退出时优雅停止 dsh 服务
  *  - 自动更新：打包版启动后检测 GitHub Release，下载后弹窗询问重启安装
+ *  - dsh 独立更新：从 GitHub Release(dsh-updates) 拉取 manifest，自动下载替换 dsh 并重启服务
  */
 const { app, BrowserWindow, Tray, Menu, Notification, dialog, shell, nativeImage } = require('electron');
 const { autoUpdater } = require('electron-updater');
@@ -16,6 +17,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, execFile } = require('node:child_process');
+const { checkAndApplyDshUpdate } = require('./dsh-update');
 
 const APP_NAME = 'DeepSeek Harness Desktop';
 const APP_ID = 'com.deepseekai.dsh.desktop';
@@ -376,6 +378,91 @@ function initAutoUpdater() {
   }, 60 * 60 * 1000);
 }
 
+/* -------------------------------------------------------- dsh 独立更新 */
+function initDshUpdater() {
+  if (!app.isPackaged) {
+    log('开发模式：跳过 dsh 更新检测');
+    return;
+  }
+  // 启动后 15 秒检查一次（让 dsh 先跑起来）
+  setTimeout(() => doDshUpdateCheck(), 15_000);
+  // 之后每 6 小时检查一次
+  setInterval(() => doDshUpdateCheck(), 6 * 60 * 60 * 1000);
+}
+
+async function doDshUpdateCheck() {
+  const result = await checkAndApplyDshUpdate(
+    {
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+      log: (msg) => log('[dsh-update]', msg),
+    },
+    {
+      onChecking: () => log('开始检查 dsh 更新'),
+      onUpdateAvailable: (v) => log(`发现 dsh 新版本 ${v}`),
+      onProgress: (p) => { if (p % 20 === 0) log(`dsh 下载进度 ${p}%`); },
+      onBeforeApply: () => stopDshAndWait(),
+      onApplied: (v) => {
+        log(`dsh 已更新到 ${v}，正在重启 dsh 服务`);
+        restartDsh();
+      },
+      onRollback: (reason) => {
+        log('dsh 更新已回滚，用旧版本重启 dsh 服务:', reason);
+        restartDsh();
+      },
+      onUpToDate: () => log('dsh 已是最新'),
+      onError: (msg) => log('dsh 更新失败:', msg),
+    }
+  );
+  log('dsh 更新检查完成:', result.updated ? `已更新到 ${result.version}` : result.reason || '跳过');
+}
+
+/** 停止 dsh 并等待进程真正退出（文件句柄释放） */
+function stopDshAndWait() {
+  return new Promise((resolve) => {
+    const child = dshProcess?.child;
+    if (!child || child.exitCode !== null || child.signalCode !== null) {
+      stopDsh();
+      return resolve();
+    }
+    stopDsh();
+    const deadline = Date.now() + 12_000;
+    const timer = setInterval(() => {
+      if (child.exitCode !== null || child.signalCode !== null || Date.now() > deadline) {
+        clearInterval(timer);
+        // 额外等待，确保 Windows 文件句柄释放
+        setTimeout(resolve, 1_500);
+      }
+    }, 300);
+  });
+}
+
+function restartDsh() {
+  (async () => {
+    log('正在重启 dsh 服务…');
+    try {
+      bootPort = await findFreePort();
+    } catch (e) {
+      log('重启时无法分配端口:', e.message);
+      return;
+    }
+    startDsh(bootPort);
+    const ready = await waitForReady(bootPort, READY_TIMEOUT_MS);
+    if (ready && win) {
+      log('dsh 重启完成，刷新窗口');
+      win.webContents.loadURL(`http://127.0.0.1:${bootPort}`);
+      if (Notification.isSupported()) {
+        new Notification({
+          title: APP_NAME,
+          body: 'dsh 已更新并重启完成。',
+        }).show();
+      }
+    } else {
+      log('dsh 重启后服务未就绪');
+    }
+  })();
+}
+
 /* ---------------------------------------------------------------- 启动 */
 async function main() {
   app.setAppUserModelId(APP_ID);
@@ -412,6 +499,7 @@ async function main() {
   createWindow();
   createTray();
   initAutoUpdater();
+  initDshUpdater();
 }
 
 /* 兜底托盘图标（16x16 PNG，深蓝圆点，由 scripts/make-icon.js 生成的正式版会覆盖） */
