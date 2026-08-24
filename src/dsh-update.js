@@ -131,16 +131,24 @@ function compareVersions(a, b) {
 
 /* ================================================================ 路径解析 */
 
-/** 获取 @deepseek-ai 目录路径（优先 unpacked） */
-function getDshModulesDir(resourcesPath, appPath) {
+/** 获取 node_modules 目录路径（优先 unpacked） */
+function getNodeModulesDir(resourcesPath, appPath) {
   const candidates = [
-    path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', '@deepseek-ai'),
-    path.join(appPath, 'node_modules', '@deepseek-ai'),
+    path.join(resourcesPath, 'app.asar.unpacked', 'node_modules'),
+    path.join(appPath, 'node_modules'),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
   return null;
+}
+
+/** 获取 @deepseek-ai 目录路径 */
+function getDshModulesDir(resourcesPath, appPath) {
+  const nm = getNodeModulesDir(resourcesPath, appPath);
+  if (!nm) return null;
+  const p = path.join(nm, '@deepseek-ai');
+  return fs.existsSync(p) ? p : null;
 }
 
 /** 获取本地 dsh 版本号 */
@@ -168,7 +176,7 @@ function findTarBin() {
   return 'tar';
 }
 
-/** 解压 tar.gz（顶层应为 @deepseek-ai/）到 targetDir */
+/** 解压 tar.gz（顶层为 node_modules/）到 targetDir（即 app 根目录） */
 function extractTarGz(archivePath, targetDir) {
   return new Promise((resolve, reject) => {
     const tar = findTarBin();
@@ -294,11 +302,12 @@ async function checkAndApplyDshUpdate(options, callbacks = {}) {
     }
 
     // 6. 定位目标目录
-    const modulesDir = getDshModulesDir(resourcesPath, appPath);
-    if (!modulesDir) {
-      throw new Error('找不到 @deepseek-ai 目录，无法更新');
+    const nodeModulesDir = getNodeModulesDir(resourcesPath, appPath);
+    if (!nodeModulesDir) {
+      throw new Error('找不到 node_modules 目录，无法更新');
     }
-    const modulesParent = path.dirname(modulesDir); // node_modules/
+    const appRoot = path.dirname(nodeModulesDir); // resources/app/
+    const dshDir = path.join(nodeModulesDir, '@deepseek-ai');
 
     // 7. 停止 dsh（文件被进程锁定时 Windows 无法替换）
     log('准备替换文件，先停止 dsh 服务…');
@@ -311,25 +320,27 @@ async function checkAndApplyDshUpdate(options, callbacks = {}) {
     // 等待文件句柄释放
     await new Promise((r) => setTimeout(r, 2000));
 
-    // 8. 备份（rename 整个 @deepseek-ai 目录）
-    const backupDir = modulesDir + '.backup';
+    // 8. 备份（rename @deepseek-ai 目录）
+    const backupDir = dshDir + '.backup';
     if (fs.existsSync(backupDir)) rmrf(backupDir);
-    fs.renameSync(modulesDir, backupDir);
-    log(`已备份 → ${backupDir}`);
+    if (fs.existsSync(dshDir)) {
+      fs.renameSync(dshDir, backupDir);
+      log(`已备份 @deepseek-ai → ${backupDir}`);
+    }
 
-    // 9. 解压（tar.gz 顶层应为 @deepseek-ai/）
+    // 9. 解压（tar.gz 顶层为 node_modules/，解压到 appRoot 合并覆盖）
     try {
-      await extractTarGz(archivePath, modulesParent);
-      // 确认解压出了 @deepseek-ai
-      if (!fs.existsSync(modulesDir)) {
-        throw new Error('解压后未找到 @deepseek-ai 目录');
+      await extractTarGz(archivePath, appRoot);
+      // 确认解压出了 @deepseek-ai/dsh
+      if (!fs.existsSync(path.join(dshDir, 'dsh', 'package.json'))) {
+        throw new Error('解压后未找到 @deepseek-ai/dsh');
       }
       log('解压完成');
     } catch (e) {
       // 回滚
       log('解压失败，正在回滚…', e.message);
-      if (fs.existsSync(modulesDir)) rmrf(modulesDir);
-      if (fs.existsSync(backupDir)) fs.renameSync(backupDir, modulesDir);
+      if (fs.existsSync(dshDir)) rmrf(dshDir);
+      if (fs.existsSync(backupDir)) fs.renameSync(backupDir, dshDir);
       onRollback?.(e.message);
       throw e;
     }
@@ -338,15 +349,15 @@ async function checkAndApplyDshUpdate(options, callbacks = {}) {
     const newVersion = getLocalDshVersion(resourcesPath, appPath);
     if (!newVersion) {
       log('解压后无法读取 dsh 版本，回滚…');
-      rmrf(modulesDir);
-      if (fs.existsSync(backupDir)) fs.renameSync(backupDir, modulesDir);
+      rmrf(dshDir);
+      if (fs.existsSync(backupDir)) fs.renameSync(backupDir, dshDir);
       onRollback?.('解压后 dsh 版本不可读，已回滚');
       throw new Error('解压后 dsh 版本不可读');
     }
     log(`新 dsh 版本确认: ${newVersion}`);
 
     // 11. 清理备份和临时文件
-    rmrf(backupDir);
+    if (fs.existsSync(backupDir)) rmrf(backupDir);
     try { fs.unlinkSync(archivePath); } catch {}
 
     // 12. 完成
@@ -369,6 +380,7 @@ module.exports = {
   checkAndApplyDshUpdate,
   compareVersions,
   getLocalDshVersion,
+  getNodeModulesDir,
   getDshModulesDir,
   MANIFEST_URL,
 };

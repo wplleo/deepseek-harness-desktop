@@ -4,13 +4,13 @@
  * dsh 构建产物打包脚本
  *
  * 用法：
- *   node scripts/pack-dsh.js <dsh源目录> <输出目录> <版本号>
+ *   node scripts/pack-dsh.js <node_modules目录> <输出目录> <版本号>
  *
  * 示例：
- *   node scripts/pack-dsh.js "E:/DeepSeek/dist/win-unpacked/resources/app.asar.unpacked/node_modules/@deepseek-ai" ./dsh-out 0.1.0-rc.7
+ *   node scripts/pack-dsh.js "E:/DeepSeek/_dsh_npm/node_modules" ./dsh-out 0.1.1-rc.2
  *
  * 产出：
- *   <输出目录>/dsh-build-<版本>.tar.gz   — 解压后顶层为 @deepseek-ai/
+ *   <输出目录>/dsh-build-<版本>.tar.gz   — 解压后顶层为 node_modules/（含 @deepseek-ai + 第三方依赖）
  *   <输出目录>/dsh-manifest.json          — 可直接上传到 GitHub Release
  *
  * 然后用 gh CLI 上传到 dsh-updates Release：
@@ -44,10 +44,10 @@ function main() {
     process.exit(1);
   }
 
-  // 确认源目录是 @deepseek-ai（包含 dsh 子目录）
-  const dshPkg = path.join(srcDir, 'dsh', 'package.json');
+  // 确认源目录是 node_modules（包含 @deepseek-ai/dsh）
+  const dshPkg = path.join(srcDir, '@deepseek-ai', 'dsh', 'package.json');
   if (!fs.existsSync(dshPkg)) {
-    console.error(`源目录下未找到 dsh/package.json，请确认路径指向 @deepseek-ai 目录`);
+    console.error(`源目录下未找到 @deepseek-ai/dsh/package.json，请确认路径指向 node_modules 目录`);
     process.exit(1);
   }
 
@@ -58,13 +58,13 @@ function main() {
   fs.mkdirSync(outDir, { recursive: true });
 
   // 打包 tar.gz
-  // tar 顶层为 @deepseek-ai/，解压到 node_modules/ 即可
+  // tar 顶层为 node_modules/，解压时合并覆盖到 app 的 node_modules/
   const archiveName = `dsh-build-${version}.tar.gz`;
   const archivePath = path.resolve(outDir, archiveName);
 
-  // 先切到 srcDir 的父目录（node_modules/），这样 tar 里的路径是 @deepseek-ai/...
+  // srcDir 就是 node_modules/，切到其父目录打包
   const parentDir = path.dirname(srcDir);
-  const dirName = path.basename(srcDir); // @deepseek-ai
+  const dirName = path.basename(srcDir); // node_modules
 
   console.log(`打包: tar -czf ${archiveName} -C ${parentDir} ${dirName}`);
   try {

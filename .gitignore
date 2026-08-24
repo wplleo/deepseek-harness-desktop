@@ -4,6 +4,8 @@ out/
 dist/
 dsh-out/
 out_old_20260822/
+vendor/
+out_v111_trash/
 
 # 日志与临时
 build.log

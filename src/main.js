@@ -130,7 +130,7 @@ function resolveDshEntry() {
 
 function startDsh(port) {
   const binJs = resolveDshEntry();
-  const args = ['web', '--port', String(port), '--host', '127.0.0.1'];
+  const args = ['--profile', 'web', '--port', String(port), '--host', '127.0.0.1'];
   let child;
   let mode;
 
