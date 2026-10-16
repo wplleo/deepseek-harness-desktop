@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "productName": "DeepSeek Harness Desktop",
   "description": "DeepSeek Harness Desktop — 桌面版 DeepSeek Harness Web GUI",
   "main": "src/main.js",
@@ -12,7 +12,8 @@
   },
   "homepage": "https://wplleo.github.io/deepseek-harness-desktop/",
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "builder-util-runtime": "9.7.0",
+    "electron-updater": "6.8.9"
   },
   "devDependencies": {
     "electron": "^37.10.3",
