@@ -130,7 +130,9 @@ function resolveDshEntry() {
 
 function startDsh(port) {
   const binJs = resolveDshEntry();
-  const args = ['--profile', 'web', '--port', String(port), '--host', '127.0.0.1'];
+  // --no-open：dsh 的 web profile 默认会在启动后打开系统默认浏览器，
+  // 桌面端已有自己的窗口，必须禁用，否则每次启动都会额外弹出一个网页
+  const args = ['--profile', 'web', '--port', String(port), '--host', '127.0.0.1', '--no-open'];
   let child;
   let mode;
 
